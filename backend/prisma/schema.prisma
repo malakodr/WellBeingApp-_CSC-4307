@@ -1,0 +1,122 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+model User {
+  id             String   @id @default(cuid())
+  email          String   @unique
+  password       String
+  name           String?
+  displayName    String?
+  role           String   // 'student', 'counselor', 'moderator', 'admin'
+  ageBracket     String?
+  consentMinorOk Boolean  @default(false)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  // Relations
+  triageForms         TriageForm[]
+  bookingsAsStudent   Booking[]      @relation("StudentBookings")
+  bookingsAsCounselor Booking[]      @relation("CounselorBookings")
+  peerMessages        PeerMessage[]
+  crisisAlerts        CrisisAlert[]
+  auditLogs           AuditLog[]
+}
+
+model TriageForm {
+  id        String   @id @default(cuid())
+  userId    String
+  topic     String
+  moodScore Int      // 1-10 scale
+  urgency   String   // 'low', 'medium', 'high', 'crisis'
+  message   String?
+  riskFlag  Boolean  @default(false)
+  route     String?  // 'CRISIS', 'BOOK', 'PEER'
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([riskFlag])
+}
+
+model Booking {
+  id          String   @id @default(cuid())
+  studentId   String
+  counselorId String
+  startAt     DateTime
+  endAt       DateTime
+  status      String   @default("PENDING") // 'PENDING', 'CONFIRMED', 'CANCELLED', 'COMPLETED'
+  notes       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  student   User @relation("StudentBookings", fields: [studentId], references: [id], onDelete: Cascade)
+  counselor User @relation("CounselorBookings", fields: [counselorId], references: [id], onDelete: Cascade)
+
+  @@index([studentId])
+  @@index([counselorId])
+  @@index([startAt])
+}
+
+model PeerRoom {
+  id          String        @id @default(cuid())
+  slug        String        @unique
+  title       String
+  topic       String
+  isMinorSafe Boolean       @default(false) // stricter moderation
+  createdAt   DateTime      @default(now())
+  messages    PeerMessage[]
+}
+
+model PeerMessage {
+  id        String   @id @default(cuid())
+  roomId    String
+  authorId  String
+  body      String
+  flagged   Boolean  @default(false)
+  flags     String   @default("[]") // JSON array of flag reasons
+  createdAt DateTime @default(now())
+
+  room PeerRoom @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  user User     @relation(fields: [authorId], references: [id], onDelete: Cascade)
+
+  @@index([roomId])
+  @@index([authorId])
+  @@index([flagged])
+}
+
+model CrisisAlert {
+  id        String   @id @default(cuid())
+  userId    String
+  message   String
+  status    String   @default("PENDING") // 'PENDING', 'ACKNOWLEDGED', 'RESOLVED'
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([status])
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  actorId   String?
+  action    String
+  metadata  String?
+  createdAt DateTime @default(now())
+
+  actor User? @relation(fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([actorId])
+  @@index([action])
+}
