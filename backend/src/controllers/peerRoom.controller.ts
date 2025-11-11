@@ -33,7 +33,7 @@ export async function listRooms(req: AuthRequest, res: Response) {
       },
     });
 
-    return res.json(rooms);
+    return res.json({ rooms });
   } catch (error) {
     console.error('Error listing rooms:', error);
     return res.status(500).json({ error: 'Failed to list rooms' });
@@ -146,7 +146,7 @@ export async function getRoomMessages(req: AuthRequest, res: Response) {
         },
       }),
       orderBy: {
-        createdAt: 'desc',
+        createdAt: 'asc', // Changed to ascending for proper chat order
       },
       include: {
         user: {
@@ -180,7 +180,7 @@ export async function getRoomMessages(req: AuthRequest, res: Response) {
     }));
 
     return res.json({
-      messages: transformedMessages.reverse(), // Show oldest first
+      messages: transformedMessages, // Already in ascending order
       nextCursor,
       hasMore,
     });

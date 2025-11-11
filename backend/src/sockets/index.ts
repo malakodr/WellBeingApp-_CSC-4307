@@ -56,12 +56,13 @@ export const initializeSocket = (httpServer: HTTPServer): SocketIOServer => {
   });
 
   io.on('connection', (socket: AuthSocket) => {
-    console.log(`User connected: ${socket.userId}`);
+    console.log(`✅ User connected: ${socket.userId} (socket: ${socket.id})`);
 
     // Join a peer room
     socket.on('joinRoom', async (data: JoinRoomData) => {
       try {
         const { slug, userId, displayName } = data;
+        console.log(`📥 Join room request: ${slug} by user ${userId}`);
 
         // Verify room exists
         const room = await prisma.peerRoom.findUnique({
@@ -75,6 +76,7 @@ export const initializeSocket = (httpServer: HTTPServer): SocketIOServer => {
         });
 
         if (!room) {
+          console.log(`❌ Room not found: ${slug}`);
           socket.emit('error', { message: 'Room not found' });
           return;
         }
@@ -87,6 +89,7 @@ export const initializeSocket = (httpServer: HTTPServer): SocketIOServer => {
         );
 
         if (!accessCheck.allowed) {
+          console.log(`❌ Access denied for user ${userId} to room ${slug}: ${accessCheck.reason}`);
           socket.emit('error', { message: accessCheck.reason });
           return;
         }
@@ -106,9 +109,9 @@ export const initializeSocket = (httpServer: HTTPServer): SocketIOServer => {
           roomSlug: slug,
         });
 
-        console.log(`User ${socket.userId} joined room ${slug}`);
+        console.log(`✅ User ${socket.userId} joined room:${slug}`);
       } catch (error) {
-        console.error('Join room error:', error);
+        console.error('❌ Join room error:', error);
         socket.emit('error', { message: 'Failed to join room' });
       }
     });
@@ -117,13 +120,16 @@ export const initializeSocket = (httpServer: HTTPServer): SocketIOServer => {
     socket.on('sendMessage', async (data: SendMessageData) => {
       try {
         const { slug, body, authorId } = data;
+        console.log(`📨 Send message request in room:${slug} by user ${authorId}`);
 
         if (!body || body.trim().length === 0) {
+          console.log(`❌ Empty message rejected`);
           socket.emit('error', { message: 'Message cannot be empty' });
           return;
         }
 
         if (body.length > 1000) {
+          console.log(`❌ Message too long (${body.length} chars)`);
           socket.emit('error', { message: 'Message too long (max 1000 characters)' });
           return;
         }
@@ -135,12 +141,14 @@ export const initializeSocket = (httpServer: HTTPServer): SocketIOServer => {
         });
 
         if (!room) {
+          console.log(`❌ Room not found: ${slug}`);
           socket.emit('error', { message: 'Room not found' });
           return;
         }
 
         // Moderate content
         const moderation = moderateContent(body, room.isMinorSafe);
+        console.log(`🔍 Moderation result - flagged: ${moderation.flagged}, flags:`, moderation.flags);
 
         // Save message to database
         const message = await prisma.peerMessage.create({
@@ -158,8 +166,10 @@ export const initializeSocket = (httpServer: HTTPServer): SocketIOServer => {
           },
         });
 
-        // Emit message to all users in the room
-        io.to(`room:${slug}`).emit('receiveMessage', {
+        console.log(`💾 Message saved: ${message.id}`);
+
+        // Prepare message payload for clients
+        const messagePayload = {
           id: message.id,
           body: message.body,
           createdAt: message.createdAt,
@@ -169,7 +179,11 @@ export const initializeSocket = (httpServer: HTTPServer): SocketIOServer => {
             id: message.user.id,
             displayName: message.user.displayName || message.user.name,
           },
-        });
+        };
+
+        // Emit message to all users in the room (including sender)
+        io.to(`room:${slug}`).emit('receiveMessage', messagePayload);
+        console.log(`📡 Message broadcasted to room:${slug}`);
 
         // If flagged, log and notify moderators
         if (moderation.flagged) {
@@ -203,7 +217,7 @@ export const initializeSocket = (httpServer: HTTPServer): SocketIOServer => {
           });
         }
       } catch (error) {
-        console.error('Send message error:', error);
+        console.error('❌ Send message error:', error);
         socket.emit('error', { message: 'Failed to send message' });
       }
     });
@@ -216,18 +230,18 @@ export const initializeSocket = (httpServer: HTTPServer): SocketIOServer => {
         userId: socket.userId, 
         roomSlug: slug 
       });
-      console.log(`User ${socket.userId} left room ${slug}`);
+      console.log(`👋 User ${socket.userId} left room:${slug}`);
     });
 
     // Moderators can join the moderators room to receive flagged message notifications
     if (socket.userRole === 'moderator' || socket.userRole === 'admin') {
       socket.join('moderators');
-      console.log(`Moderator ${socket.userId} joined moderators room`);
+      console.log(`🛡️  Moderator ${socket.userId} joined moderators room`);
     }
 
     // Disconnect
     socket.on('disconnect', () => {
-      console.log(`User disconnected: ${socket.userId}`);
+      console.log(`❌ User disconnected: ${socket.userId} (socket: ${socket.id})`);
     });
   });
 
