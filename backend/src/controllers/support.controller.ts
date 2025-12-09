@@ -54,32 +54,17 @@ function determineRouting(urgency: string, topic: string): string {
 /**
  * POST /api/support/request
  * Student requests private support - creates a new support room
+ * UPDATED: Students can now have multiple concurrent chat sessions
  */
 export const requestSupport = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const validatedData = requestSupportSchema.parse(req.body);
     const studentId = req.user!.sub;
 
-    // Check if student already has an active support room
-    const existingRoom = await prisma.supportRoom.findFirst({
-      where: {
-        studentId,
-        status: { in: ['WAITING', 'ACTIVE'] },
-      },
-    });
-
-    if (existingRoom) {
-      res.status(400).json({ 
-        error: 'You already have an active support session',
-        roomId: existingRoom.id,
-      });
-      return;
-    }
-
     // Determine routing
     const routedTo = determineRouting(validatedData.urgency, validatedData.topic);
 
-    // Create private support room
+    // Create private support room (no restriction on multiple active rooms)
     const room = await prisma.supportRoom.create({
       data: {
         studentId,

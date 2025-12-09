@@ -4,6 +4,7 @@ import BenefitsSection from '../components/landing/BenefitsSection';
 import HowItWorksSection from '../components/landing/HowItWorksSection';
 import FeatureShowcase from '../components/landing/FeatureShowcase';
 import FinalCTA from '../components/landing/FinalCTA';
+import Footer from '../components/Footer';
 
 export default function Landing() {
   return (
@@ -25,6 +26,9 @@ export default function Landing() {
 
       {/* Final CTA Section */}
       <FinalCTA />
+
+      {/* Footer */}
+      <Footer />
     </div>
   );
 }

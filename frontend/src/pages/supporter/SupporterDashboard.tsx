@@ -9,7 +9,8 @@ import {
   CheckCircle,
   TrendingUp,
   User,
-  ChevronRight
+  ChevronRight,
+  X
 } from 'lucide-react';
 import { api } from '../../lib/api';
 
@@ -30,17 +31,20 @@ interface Booking {
   status: string;
   notes?: string;
   student: {
-    displayName: string;
+    displayName?: string;
+    name?: string;
   };
 }
 
 export function SupporterDashboard() {
   const [studentsInQueue, setStudentsInQueue] = useState<Student[]>([]);
   const [todayBookings, setTodayBookings] = useState<Booking[]>([]);
+  const [pendingBookings, setPendingBookings] = useState<Booking[]>([]);
   const [stats, setStats] = useState({
     queueCount: 0,
     activeChats: 0,
     todaySessions: 0,
+    pendingRequests: 0,
     avgResponseTime: '4.2m'
   });
   const [loading, setLoading] = useState(true);
@@ -66,13 +70,26 @@ export function SupporterDashboard() {
           const tomorrow = new Date(today);
           tomorrow.setDate(tomorrow.getDate() + 1);
           
-          const todaysBookings = bookingsRes.value.bookings.filter((b: Booking) => {
+          const allBookings = bookingsRes.value.bookings || [];
+          
+          // Only show CONFIRMED bookings in today's sessions
+          const todaysBookings = allBookings.filter((b: Booking) => {
             const bookingDate = new Date(b.startAt);
-            return bookingDate >= today && bookingDate < tomorrow;
+            return bookingDate >= today && bookingDate < tomorrow && b.status === 'CONFIRMED';
           });
           
+          // Show all PENDING bookings (any date in the future)
+          const pending = allBookings.filter((b: Booking) => 
+            b.status === 'PENDING' && new Date(b.startAt) >= new Date()
+          );
+          
           setTodayBookings(todaysBookings);
-          setStats(prev => ({ ...prev, todaySessions: todaysBookings.length }));
+          setPendingBookings(pending);
+          setStats(prev => ({ 
+            ...prev, 
+            todaySessions: todaysBookings.length,
+            pendingRequests: pending.length 
+          }));
         }
       } catch (error) {
         console.error('Error fetching supporter dashboard data:', error);
@@ -97,6 +114,55 @@ export function SupporterDashboard() {
       setStats(prev => ({ ...prev, queueCount: queueRes.queue.length, activeChats: prev.activeChats + 1 }));
     } catch (error) {
       console.error('Error accepting student:', error);
+    }
+  };
+
+  const handleAcceptBooking = async (bookingId: string) => {
+    try {
+      await api.confirmBooking(bookingId);
+      // Refresh bookings
+      const bookingsRes = await api.getMyBookings();
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const tomorrow = new Date(today);
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      
+      const allBookings = bookingsRes.bookings || [];
+      const todaysBookings = allBookings.filter((b: Booking) => {
+        const bookingDate = new Date(b.startAt);
+        return bookingDate >= today && bookingDate < tomorrow && b.status === 'CONFIRMED';
+      });
+      const pending = allBookings.filter((b: Booking) => 
+        b.status === 'PENDING' && new Date(b.startAt) >= new Date()
+      );
+      
+      setTodayBookings(todaysBookings);
+      setPendingBookings(pending);
+      setStats(prev => ({ 
+        ...prev, 
+        todaySessions: todaysBookings.length,
+        pendingRequests: pending.length 
+      }));
+    } catch (error) {
+      console.error('Error accepting booking:', error);
+      alert('Failed to accept booking. Please try again.');
+    }
+  };
+
+  const handleRejectBooking = async (bookingId: string) => {
+    try {
+      await api.cancelBooking(bookingId);
+      // Refresh bookings
+      const bookingsRes = await api.getMyBookings();
+      const pending = bookingsRes.bookings.filter((b: Booking) => 
+        b.status === 'PENDING' && new Date(b.startAt) >= new Date()
+      );
+      
+      setPendingBookings(pending);
+      setStats(prev => ({ ...prev, pendingRequests: pending.length }));
+    } catch (error) {
+      console.error('Error rejecting booking:', error);
+      alert('Failed to reject booking. Please try again.');
     }
   };
 
@@ -153,6 +219,21 @@ export function SupporterDashboard() {
           </div>
         </div>
 
+        <Link to="/supporter/calendar" className="bg-white rounded-lg border border-gray-200 p-6 hover:shadow-md transition-shadow">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-gray-600">Booking Requests</p>
+              <p className="text-3xl font-bold text-gray-900 mt-2">{stats.pendingRequests}</p>
+            </div>
+            <div className="w-12 h-12 bg-yellow-100 rounded-lg flex items-center justify-center">
+              <Calendar className="w-6 h-6 text-yellow-600" />
+            </div>
+          </div>
+          <div className="mt-4 flex items-center gap-2 text-sm">
+            <span className="text-yellow-600 font-medium">Needs your review</span>
+          </div>
+        </Link>
+
         <div className="bg-white rounded-lg border border-gray-200 p-6">
           <div className="flex items-center justify-between">
             <div>
@@ -164,7 +245,7 @@ export function SupporterDashboard() {
             </div>
           </div>
           <div className="mt-4 flex items-center gap-2 text-sm">
-            <span className="text-gray-500">{todayBookings.filter(b => new Date(b.startAt) > new Date()).length} upcoming</span>
+            <span className="text-gray-500">{todayBookings.filter(b => new Date(b.startAt) > new Date()).length} upcoming confirmed</span>
           </div>
         </div>
 
@@ -278,6 +359,83 @@ export function SupporterDashboard() {
           </div>
         </div>
 
+        {/* Pending Booking Requests */}
+        <div className="bg-white rounded-lg border border-gray-200">
+          <div className="p-6 border-b border-gray-200">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900">Booking Requests</h3>
+                <p className="text-sm text-gray-500 mt-1">Students waiting for confirmation</p>
+              </div>
+              <Link
+                to="/supporter/calendar"
+                className="text-sm font-medium text-[#006341] hover:text-[#00875c] flex items-center gap-1"
+              >
+                View All
+                <ChevronRight className="w-4 h-4" />
+              </Link>
+            </div>
+          </div>
+          <div className="p-6 space-y-4">
+            {loading ? (
+              <div className="text-center py-4">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#006341] mx-auto"></div>
+              </div>
+            ) : pendingBookings.length > 0 ? (
+              pendingBookings.slice(0, 3).map((booking) => (
+                <div 
+                  key={booking.id}
+                  className="p-4 border-l-4 border-yellow-500 bg-yellow-50 rounded"
+                >
+                  <div className="flex items-start gap-3 mb-3">
+                    <div className="shrink-0">
+                      <p className="text-sm font-bold text-yellow-700">
+                        {new Date(booking.startAt).toLocaleDateString('en-US', { 
+                          month: 'short',
+                          day: 'numeric'
+                        })}
+                      </p>
+                      <p className="text-xs text-gray-600">
+                        {new Date(booking.startAt).toLocaleTimeString('en-US', { 
+                          hour: 'numeric', 
+                          minute: '2-digit' 
+                        })}
+                      </p>
+                    </div>
+                    <div className="flex-1">
+                      <p className="font-medium text-gray-900">{booking.student.displayName || booking.student.name}</p>
+                      <p className="text-sm text-gray-600">{booking.notes || 'No notes provided'}</p>
+                    </div>
+                    <div className="shrink-0">
+                      <span className="px-3 py-1 text-xs font-medium bg-yellow-100 text-yellow-800 rounded-full border border-yellow-200">
+                        PENDING
+                      </span>
+                    </div>
+                  </div>
+                  <div className="flex gap-2 mt-3">
+                    <button
+                      onClick={() => handleAcceptBooking(booking.id)}
+                      className="flex-1 px-4 py-2 bg-[#006341] text-white text-sm font-medium rounded-lg hover:bg-[#00875c] transition-colors flex items-center justify-center gap-2"
+                    >
+                      <CheckCircle className="w-4 h-4" />
+                      Accept
+                    </button>
+                    <button
+                      onClick={() => handleRejectBooking(booking.id)}
+                      className="flex-1 px-4 py-2 bg-white border border-red-300 text-red-600 text-sm font-medium rounded-lg hover:bg-red-50 transition-colors flex items-center justify-center gap-2"
+                    >
+                      <X className="w-4 h-4" />
+                      Reject
+                    </button>
+                  </div>
+                </div>
+              ))
+            ) : (
+              <p className="text-center text-gray-500 py-4">No pending booking requests</p>
+            )}
+          </div>
+        </div>
+
         {/* Today's Schedule */}
         <div className="bg-white rounded-lg border border-gray-200">
           <div className="p-6 border-b border-gray-200">
@@ -312,7 +470,7 @@ export function SupporterDashboard() {
                       </p>
                     </div>
                     <div className="flex-1">
-                      <p className="font-medium text-gray-900">{booking.student.displayName}</p>
+                      <p className="font-medium text-gray-900">{booking.student.displayName || booking.student.name}</p>
                       <p className="text-sm text-gray-600">{booking.notes || 'Session'}</p>
                     </div>
                     {!isUpcoming && <CheckCircle className="w-5 h-5 text-[#006341]" />}

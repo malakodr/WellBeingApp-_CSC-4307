@@ -1,0 +1,87 @@
+name: Pull Request Checks
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+jobs:
+  pr-validation:
+    name: PR Validation
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      - name: Check PR title
+        run: |
+          PR_TITLE="${{ github.event.pull_request.title }}"
+          echo "PR Title: $PR_TITLE"
+          
+          # Check for conventional commit format (optional)
+          if [[ ! "$PR_TITLE" =~ ^(feat|fix|docs|style|refactor|perf|test|chore|ci)(\(.+\))?: ]]; then
+            echo "⚠️ PR title doesn't follow conventional commit format"
+            echo "Consider using: feat|fix|docs|style|refactor|perf|test|chore|ci: description"
+          else
+            echo "✅ PR title follows conventional commit format"
+          fi
+      
+      - name: Check for large files
+        run: |
+          echo "Checking for large files..."
+          find . -type f -size +5M ! -path "./.git/*" ! -path "*/node_modules/*" -exec ls -lh {} \; | awk '{print $9, $5}' || echo "No large files found"
+      
+      - name: Label PR based on files changed
+        uses: actions/labeler@v5
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+
+  size-check:
+    name: Bundle Size Check
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout base branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.base_ref }}
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20.x'
+      
+      - name: Build base frontend
+        working-directory: ./frontend
+        run: |
+          npm ci
+          npm run build
+          BASE_SIZE=$(du -sb dist | cut -f1)
+          echo "BASE_SIZE=$BASE_SIZE" >> $GITHUB_ENV
+      
+      - name: Checkout PR branch
+        uses: actions/checkout@v4
+      
+      - name: Build PR frontend
+        working-directory: ./frontend
+        run: |
+          npm ci
+          npm run build
+          PR_SIZE=$(du -sb dist | cut -f1)
+          echo "PR_SIZE=$PR_SIZE" >> $GITHUB_ENV
+      
+      - name: Compare bundle sizes
+        run: |
+          echo "## Bundle Size Comparison" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Base size: $(numfmt --to=iec-i --suffix=B ${{ env.BASE_SIZE }})" >> $GITHUB_STEP_SUMMARY
+          echo "PR size: $(numfmt --to=iec-i --suffix=B ${{ env.PR_SIZE }})" >> $GITHUB_STEP_SUMMARY
+          
+          DIFF=$((PR_SIZE - BASE_SIZE))
+          if [ $DIFF -gt 0 ]; then
+            echo "Change: +$(numfmt --to=iec-i --suffix=B $DIFF) ⚠️" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "Change: $(numfmt --to=iec-i --suffix=B $DIFF) ✅" >> $GITHUB_STEP_SUMMARY
+          fi

@@ -8,6 +8,7 @@ import { useNavigate } from 'react-router-dom';
 import { User, Mail, Lock, Camera, Save, ArrowLeft, LogOut, Bell, Shield, Eye, EyeOff } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
 import { api } from '../../lib/api';
+import { BecomePeerEntry } from '../../components/BecomePeerEntry';
 
 export function StudentSettings() {
   const { user, logout } = useAuth();
@@ -256,6 +257,23 @@ export function StudentSettings() {
             <Lock className="w-5 h-5" />
             {saving ? 'Changing...' : 'Change Password'}
           </button>
+        </div>
+
+        {/* More Options Section */}
+        <div className="bg-white rounded-3xl p-6 shadow-sm border border-gray-100">
+          <div className="flex items-center gap-3 mb-6">
+            <div className="w-12 h-12 bg-linear-to-br from-emerald-100 to-green-100 rounded-2xl flex items-center justify-center">
+              <User className="w-6 h-6 text-[#006341]" />
+            </div>
+            <div>
+              <h2 className="text-xl font-semibold text-gray-900">More Options</h2>
+              <p className="text-sm text-gray-600">Additional features and opportunities</p>
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <BecomePeerEntry variant="menu" />
+          </div>
         </div>
 
         {/* Preferences Section */}

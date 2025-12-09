@@ -291,6 +291,20 @@ export const deleteUser = async (req: AuthRequest, res: Response): Promise<void>
       return;
     }
 
+    // Check if this user has an associated peer application
+    const peerApplication = await prisma.peerApplication.findUnique({
+      where: { auiEmail: user.email },
+    });
+
+    // Delete the peer application if it exists (to allow resubmission)
+    if (peerApplication) {
+      await prisma.peerApplication.delete({
+        where: { id: peerApplication.id },
+      });
+      console.log(`🗑️ Deleted associated peer application for: ${user.email}`);
+    }
+
+    // Delete the user
     await prisma.user.delete({
       where: { id },
     });
@@ -301,10 +315,16 @@ export const deleteUser = async (req: AuthRequest, res: Response): Promise<void>
       action: 'DELETE_USER',
       entity: 'User',
       entityId: id,
-      metadata: JSON.stringify({ deletedUserEmail: user.email }),
+      metadata: JSON.stringify({ 
+        deletedUserEmail: user.email,
+        deletedPeerApplication: peerApplication ? true : false 
+      }),
     });
 
-    res.json({ message: 'User deleted successfully' });
+    res.json({ 
+      message: 'User deleted successfully',
+      peerApplicationDeleted: peerApplication ? true : false 
+    });
   } catch (error) {
     console.error('Delete user error:', error);
     res.status(500).json({ error: 'Internal server error' });

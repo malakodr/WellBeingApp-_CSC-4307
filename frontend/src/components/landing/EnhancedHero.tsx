@@ -102,6 +102,23 @@ export default function EnhancedHero() {
               </a>
             </motion.div>
 
+            {/* Secondary CTA - Become a Peer Mentor */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.6 }}
+              className="mt-6"
+            >
+              <Link
+                to="/become-peer"
+                className="inline-flex items-center gap-2 text-[#006341] hover:text-[#005030] font-semibold transition-colors group"
+              >
+                <Heart className="h-5 w-5" />
+                Want to help others? Become a Peer Mentor
+                <ArrowRight className="h-4 w-4 group-hover:translate-x-1 transition-transform" />
+              </Link>
+            </motion.div>
+
             {/* Trust Indicators */}
             <motion.div
               initial={{ opacity: 0 }}

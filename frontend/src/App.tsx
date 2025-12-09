@@ -48,6 +48,7 @@ import { SupporterSettings } from './pages/supporter/SupporterSettings';
 import { AdminDashboard } from './pages/admin/AdminDashboard';
 import { AdminUsers } from './pages/admin/AdminUsers';
 import { AdminPeerApplications } from './pages/admin/AdminPeerApplications';
+import { AdminPeerApplicationDetail } from './pages/admin/AdminPeerApplicationDetail';
 import { AdminAnalytics } from './pages/admin/AdminAnalytics';
 import { AdminReports } from './pages/admin/AdminReports';
 import { AdminActivity } from './pages/admin/AdminActivity';
@@ -123,6 +124,7 @@ function AppRoutes() {
         <Route path="booking-confirmation" element={<BookingConfirmationPage />} />
         <Route path="progress" element={<StudentProgress />} />
         <Route path="settings" element={<StudentSettings />} />
+        <Route path="become-peer" element={<BecomePeer />} />
       </Route>
 
       {/* Support Room Routes (accessible by students and supporters) */}
@@ -164,6 +166,7 @@ function AppRoutes() {
         <Route path="dashboard" element={<AdminDashboard />} />
         <Route path="users" element={<AdminUsers />} />
         <Route path="peer-applications" element={<AdminPeerApplications />} />
+        <Route path="peer-applications/:id" element={<AdminPeerApplicationDetail />} />
         <Route path="analytics" element={<AdminAnalytics />} />
         <Route path="reports" element={<AdminReports />} />
         <Route path="activity" element={<AdminActivity />} />

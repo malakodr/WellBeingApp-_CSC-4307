@@ -228,7 +228,7 @@ class ApiClient {
     endAt: string;
     notes?: string;
   }) {
-    return this.request<{ booking: any }>('/bookings', {
+    return this.request<{ booking: any; message?: string }>('/bookings', {
       method: 'POST',
       body: JSON.stringify(data),
     });
@@ -236,6 +236,19 @@ class ApiClient {
 
   async getMyBookings() {
     return this.request<{ bookings: any[] }>('/bookings/my');
+  }
+
+  async getBookings(filters?: { counselorId?: string; status?: string; userId?: string }) {
+    const params = new URLSearchParams();
+    if (filters?.counselorId) params.append('counselorId', filters.counselorId);
+    if (filters?.status) params.append('status', filters.status);
+    if (filters?.userId) params.append('userId', filters.userId);
+    const query = params.toString() ? `?${params.toString()}` : '';
+    return this.request<{ bookings: any[]; count: number }>(`/bookings${query}`);
+  }
+
+  async getBookingById(bookingId: string) {
+    return this.request<{ booking: any }>(`/bookings/${bookingId}`);
   }
 
   async getCounselors() {
@@ -251,6 +264,14 @@ class ApiClient {
 
   async cancelBooking(bookingId: string) {
     return this.updateBooking(bookingId, { status: 'CANCELLED' });
+  }
+
+  async confirmBooking(bookingId: string) {
+    return this.updateBooking(bookingId, { status: 'CONFIRMED' });
+  }
+
+  async completeBooking(bookingId: string) {
+    return this.updateBooking(bookingId, { status: 'COMPLETED' });
   }
 
   async getCounselorAvailability(counselorId: string, startDate?: string, endDate?: string) {
@@ -302,6 +323,29 @@ class ApiClient {
   async getPeerApplications(status?: string) {
     const query = status ? `?status=${status}` : '';
     return this.request<{ applications: any[] }>(`/peer-applications${query}`);
+  }
+
+  async getPeerApplication(applicationId: string) {
+    return this.request<{ application: any }>(`/peer-applications/${applicationId}`);
+  }
+
+  async approveApplication(applicationId: string) {
+    return this.request<{ application: any; user: any }>(`/peer-applications/${applicationId}/approve`, {
+      method: 'POST',
+    });
+  }
+
+  async rejectApplication(applicationId: string, reason?: string) {
+    return this.request<{ application: any }>(`/peer-applications/${applicationId}/reject`, {
+      method: 'POST',
+      body: JSON.stringify({ reason }),
+    });
+  }
+
+  async deleteApplication(applicationId: string) {
+    return this.request<{ message: string }>(`/peer-applications/${applicationId}`, {
+      method: 'DELETE',
+    });
   }
 
   async reviewPeerApplication(applicationId: string, data: {

@@ -31,6 +31,9 @@ export default function LandingNav() {
             <a href="#testimonials" className="text-text-secondary hover:text-primary font-medium transition-colors">
               Testimonials
             </a>
+            <Link to="/become-peer" className="text-[#006341] hover:text-[#005030] font-semibold transition-colors">
+              Become a Peer
+            </Link>
             
             <div className="flex items-center gap-3 ml-4">
               <Link 
@@ -96,6 +99,13 @@ export default function LandingNav() {
             >
               Testimonials
             </a>
+            <Link 
+              to="/become-peer" 
+              onClick={() => setMobileMenuOpen(false)}
+              className="block text-[#006341] hover:text-[#005030] font-semibold py-2 transition-colors"
+            >
+              Become a Peer
+            </Link>
             
             <div className="pt-4 space-y-3 border-t border-gray-100">
               <Link 

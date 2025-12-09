@@ -9,6 +9,7 @@ import {
   activatePeerAccount,
   getApplicationByToken,
   deleteApplication,
+  resetApplication,
 } from '../controllers/peerApplication.controller';
 
 const router = Router();
@@ -23,6 +24,7 @@ router.get('/', authMiddleware, roleMiddleware(['admin', 'counselor']), getAllAp
 router.get('/:id', authMiddleware, roleMiddleware(['admin', 'counselor']), getApplication);
 router.post('/:id/approve', authMiddleware, roleMiddleware(['admin']), approveApplication);
 router.post('/:id/reject', authMiddleware, roleMiddleware(['admin']), rejectApplication);
+router.post('/:id/reset', authMiddleware, roleMiddleware(['admin']), resetApplication);
 router.delete('/:id', authMiddleware, roleMiddleware(['admin']), deleteApplication);
 
 export default router;

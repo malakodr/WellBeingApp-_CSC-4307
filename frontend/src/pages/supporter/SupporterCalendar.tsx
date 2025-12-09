@@ -11,6 +11,7 @@ interface Booking {
   student: {
     id: string;
     name: string;
+    displayName?: string;
     email: string;
   };
 }
@@ -151,10 +152,17 @@ export function SupporterCalendar() {
 
   const handleUpdateStatus = async (bookingId: string, status: string) => {
     try {
-      await api.updateBooking(bookingId, { status });
+      if (status === 'CONFIRMED') {
+        await api.confirmBooking(bookingId);
+      } else if (status === 'CANCELLED') {
+        await api.cancelBooking(bookingId);
+      } else {
+        await api.updateBooking(bookingId, { status });
+      }
       await fetchBookings();
     } catch (error) {
       console.error('Error updating booking:', error);
+      alert('Failed to update booking status. Please try again.');
     }
   };
 
@@ -341,7 +349,7 @@ export function SupporterCalendar() {
                                   <p className="text-sm font-medium text-gray-900">
                                     {formatTime(booking.startAt)} - {formatTime(booking.endAt)}
                                   </p>
-                                  <p className="text-xs text-gray-600">{booking.student.name}</p>
+                                  <p className="text-xs text-gray-600">{booking.student.displayName || booking.student.name}</p>
                                 </div>
                               </div>
                               <span
@@ -379,7 +387,7 @@ export function SupporterCalendar() {
                             <User className="w-5 h-5 text-[#006341]" />
                           </div>
                           <div>
-                            <p className="font-semibold text-gray-900">{booking.student.name}</p>
+                            <p className="font-semibold text-gray-900">{booking.student.displayName || booking.student.name}</p>
                             <p className="text-sm text-gray-600">{booking.student.email}</p>
                             <div className="flex items-center gap-2 mt-2 text-sm text-gray-600">
                               <Clock className="w-4 h-4" />
@@ -474,7 +482,7 @@ export function SupporterCalendar() {
                           {formatTime(booking.startAt)}
                         </span>
                       </div>
-                      <p className="text-sm text-gray-700 font-medium">{booking.student.name}</p>
+                      <p className="text-sm text-gray-700 font-medium">{booking.student.displayName || booking.student.name}</p>
                       <span
                         className={`inline-block mt-2 px-2 py-0.5 text-xs font-medium rounded-full border ${getStatusColor(
                           booking.status

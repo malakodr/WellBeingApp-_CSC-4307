@@ -1,0 +1,27 @@
+backend:
+  - backend/**/*
+  - backend/*
+
+frontend:
+  - frontend/**/*
+  - frontend/*
+
+documentation:
+  - '**/*.md'
+  - docs/**/*
+
+database:
+  - backend/prisma/**/*
+  - '**/*.prisma'
+
+ci/cd:
+  - .github/**/*
+
+dependencies:
+  - '**/package.json'
+  - '**/package-lock.json'
+
+typescript:
+  - '**/*.ts'
+  - '**/*.tsx'
+  - '**/tsconfig.json'

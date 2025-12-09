@@ -25,6 +25,7 @@ import { useAuth } from '../../hooks/useAuth';
 import { DashboardSkeleton } from '../../components/shared/LoadingSkeleton';
 import { EmptyState } from '../../components/shared/EmptyState';
 import { ErrorDisplay } from '../../components/shared/ErrorDisplay';
+import { BecomePeerEntry } from '../../components/BecomePeerEntry';
 
 interface Booking {
   id: string;
@@ -315,6 +316,9 @@ export function StudentDashboard() {
             </Link>
           </div>
         </div>
+
+        {/* Become a Peer Mentor Promotional Card */}
+        <BecomePeerEntry variant="card" />
 
         {/* Active Support & Upcoming Sessions */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

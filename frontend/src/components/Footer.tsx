@@ -1,4 +1,5 @@
 import { Heart, Phone } from 'lucide-react';
+import { Link } from 'react-router-dom';
 
 export default function Footer() {
   const currentYear = new Date().getFullYear();
@@ -15,6 +16,7 @@ export default function Footer() {
       { label: 'Crisis Resources', href: '#' },
       { label: 'FAQ', href: '#' },
       { label: 'Accessibility', href: '#' },
+      { label: 'Become a Peer Mentor', href: '/become-peer', isRoute: true },
     ],
   };
 
@@ -62,12 +64,21 @@ export default function Footer() {
             <ul className="space-y-3">
               {footerLinks.support.map((link, index) => (
                 <li key={index}>
-                  <a 
-                    href={link.href}
-                    className="text-primary-100 hover:text-white transition-colors duration-200 text-base hover:translate-x-1 inline-block"
-                  >
-                    {link.label}
-                  </a>
+                  {link.isRoute ? (
+                    <Link 
+                      to={link.href}
+                      className="text-primary-100 hover:text-white transition-colors duration-200 text-base hover:translate-x-1 inline-block font-semibold"
+                    >
+                      {link.label}
+                    </Link>
+                  ) : (
+                    <a 
+                      href={link.href}
+                      className="text-primary-100 hover:text-white transition-colors duration-200 text-base hover:translate-x-1 inline-block"
+                    >
+                      {link.label}
+                    </a>
+                  )}
                 </li>
               ))}
             </ul>

@@ -482,3 +482,52 @@ export const deleteApplication = async (
     return next(error);
   }
 };
+
+// Reset application to allow resubmission (admin only)
+// Useful when a user account was deleted but application still exists
+export const resetApplication = async (
+  req: AuthRequest,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const { id } = req.params;
+
+    const application = await prisma.peerApplication.findUnique({
+      where: { id },
+    });
+
+    if (!application) {
+      return res.status(404).json({ error: 'Application not found' });
+    }
+
+    // Delete the application to allow fresh resubmission
+    await prisma.peerApplication.delete({
+      where: { id },
+    });
+
+    console.log(`🔄 Reset application for ${application.fullName} (${application.auiEmail}) - can now reapply`);
+
+    // Log activity
+    await logActivity({
+      userId: req.user?.sub,
+      action: 'RESET_APPLICATION',
+      entity: 'PeerApplication',
+      entityId: id,
+      metadata: JSON.stringify({ 
+        applicantEmail: application.auiEmail,
+        previousStatus: application.status 
+      }),
+    });
+
+    res.json({
+      message: 'Application reset successfully. User can now submit a new application.',
+      resetApplication: {
+        email: application.auiEmail,
+        fullName: application.fullName,
+      },
+    });
+  } catch (error) {
+    return next(error);
+  }
+};
