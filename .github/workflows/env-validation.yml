@@ -1,0 +1,56 @@
+name: Environment Validation
+
+on:
+  workflow_dispatch:
+  schedule:
+    # Run daily at 06:00 UTC
+    - cron: '0 6 * * *'
+
+jobs:
+  validate:
+    name: Validate Project Dependencies
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20.x'
+      
+      - name: Check Backend Dependencies
+        working-directory: ./backend
+        run: |
+          echo "## Backend Dependency Check" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          npm install --package-lock-only
+          npm outdated || true
+          echo "✅ Backend dependencies checked" >> $GITHUB_STEP_SUMMARY
+      
+      - name: Check Frontend Dependencies
+        working-directory: ./frontend
+        run: |
+          echo "## Frontend Dependency Check" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          npm install --package-lock-only
+          npm outdated || true
+          echo "✅ Frontend dependencies checked" >> $GITHUB_STEP_SUMMARY
+      
+      - name: Verify Environment Files
+        run: |
+          echo "## Environment Configuration" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          if [ -f "backend/.env.example" ]; then
+            echo "✅ Backend .env.example found" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "⚠️ Backend .env.example missing" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          if [ -f "frontend/.env.example" ]; then
+            echo "✅ Frontend .env.example found" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "⚠️ Frontend .env.example missing" >> $GITHUB_STEP_SUMMARY
+          fi

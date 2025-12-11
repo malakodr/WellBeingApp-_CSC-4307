@@ -1,6 +1,6 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { io, Socket } from 'socket.io-client';
+import { io } from 'socket.io-client';
 import { MessageBubble } from '../components/MessageBubble';
 import { Button } from '../components/ui/button';
 import { Textarea } from '../components/ui/textarea';
@@ -42,10 +42,22 @@ export default function RoomPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
-  const [socket, setSocket] = useState<Socket | null>(null);
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // Create a single persistent socket instance
+  const socket = useMemo(() => {
+    const token = sessionStorage.getItem('auth_token');
+    if (!token) return null;
+    
+    const socketInstance = io(SOCKET_URL, {
+      auth: { token },
+      transports: ['websocket', 'polling'],
+    });
+
+    return socketInstance;
+  }, []); // Only create once
 
   // Scroll to bottom when new messages arrive
   const scrollToBottom = () => {
@@ -56,7 +68,7 @@ export default function RoomPage() {
     scrollToBottom();
   }, [messages]);
 
-  // Fetch room metadata and initialize Socket.IO
+  // Fetch room metadata and initial messages
   useEffect(() => {
     if (!slug || !user) return;
 
@@ -67,49 +79,11 @@ export default function RoomPage() {
 
         // Fetch room metadata
         const roomData = await api.getRoom(slug);
-        setRoom(roomData);
+        setRoom(roomData.room);
 
         // Fetch initial messages (last 50)
         const messagesData = await api.getRoomMessages(slug, { limit: 50 });
         setMessages(messagesData.messages);
-
-        // Initialize Socket.IO connection
-        const token = localStorage.getItem('auth_token');
-        const socketInstance = io(SOCKET_URL, {
-          auth: { token },
-          transports: ['websocket', 'polling'],
-        });
-
-        socketInstance.on('connect', () => {
-          console.log('Socket connected');
-          
-          // Join the room
-          socketInstance.emit('joinRoom', {
-            slug,
-            userId: user.id,
-            displayName: user.displayName || user.name,
-          });
-        });
-
-        socketInstance.on('joinedRoom', (data) => {
-          console.log('Joined room:', data);
-        });
-
-        socketInstance.on('receiveMessage', (message: Message) => {
-          console.log('Received message:', message);
-          setMessages((prev) => [...prev, message]);
-        });
-
-        socketInstance.on('error', (errorData) => {
-          console.error('Socket error:', errorData);
-          setError(errorData.message || 'Connection error');
-        });
-
-        socketInstance.on('disconnect', () => {
-          console.log('Socket disconnected');
-        });
-
-        setSocket(socketInstance);
 
       } catch (err: any) {
         console.error('Error initializing room:', err);
@@ -126,28 +100,137 @@ export default function RoomPage() {
     };
 
     initializeRoom();
+  }, [slug, user, navigate]);
 
-    // Cleanup on unmount
+  // Socket.IO connection and event handlers
+  useEffect(() => {
+    if (!socket || !slug || !user) return;
+
+    console.log('Setting up socket listeners for room:', slug);
+
+    const handleConnect = () => {
+      console.log('✅ Socket connected:', socket.id);
+      
+      // Join the room
+      socket.emit('joinRoom', {
+        slug,
+        userId: user.id,
+        displayName: user.displayName || user.name,
+      });
+    };
+
+    const handleJoinedRoom = (data: any) => {
+      console.log('✅ Joined room:', data);
+    };
+
+    const handleReceiveMessage = (message: Message) => {
+      console.log('📨 Received message:', message);
+      setMessages((prev) => {
+        // Remove any temporary optimistic message with same content
+        const withoutTemp = prev.filter(m => 
+          !(m.id.startsWith('temp-') && m.body === message.body)
+        );
+        
+        // Check if real message already exists
+        const exists = withoutTemp.some(m => m.id === message.id);
+        if (exists) {
+          console.log('⚠️  Duplicate message detected, skipping:', message.id);
+          return prev;
+        }
+        
+        return [...withoutTemp, message];
+      });
+    };
+
+    const handleError = (errorData: any) => {
+      console.error('❌ Socket error:', errorData);
+      setError(errorData.message || 'Connection error');
+    };
+
+    const handleDisconnect = () => {
+      console.log('❌ Socket disconnected');
+    };
+
+    // Attach event listeners
+    socket.on('connect', handleConnect);
+    socket.on('joinedRoom', handleJoinedRoom);
+    socket.on('receiveMessage', handleReceiveMessage);
+    socket.on('error', handleError);
+    socket.on('disconnect', handleDisconnect);
+
+    // If already connected, join the room immediately
+    if (socket.connected) {
+      handleConnect();
+    }
+
+    // Cleanup function
+    return () => {
+      console.log('🧹 Cleaning up socket listeners for room:', slug);
+      socket.off('connect', handleConnect);
+      socket.off('joinedRoom', handleJoinedRoom);
+      socket.off('receiveMessage', handleReceiveMessage);
+      socket.off('error', handleError);
+      socket.off('disconnect', handleDisconnect);
+      
+      // Leave the room
+      socket.emit('leaveRoom', { slug });
+    };
+  }, [socket, slug, user]);
+
+  // Cleanup socket on unmount
+  useEffect(() => {
     return () => {
       if (socket) {
-        socket.emit('leaveRoom', { slug });
+        console.log('🔌 Disconnecting socket');
         socket.disconnect();
       }
     };
-  }, [slug, user]);
+  }, [socket]);
 
   const handleSendMessage = async () => {
-    if (!newMessage.trim() || !socket || !user || !room) return;
+    if (!newMessage.trim() || !socket || !user || !room) {
+      console.log('❌ Cannot send - missing requirements:', {
+        hasMessage: !!newMessage.trim(),
+        hasSocket: !!socket,
+        socketConnected: socket?.connected,
+        hasUser: !!user,
+        hasRoom: !!room
+      });
+      return;
+    }
+
+    const messageBody = newMessage.trim();
+    console.log('📤 Sending message:', messageBody);
+    console.log('Socket connected:', socket.connected);
+    console.log('User:', { id: user.id, displayName: user.displayName || user.name });
 
     try {
       setSending(true);
 
+      // Optimistic update - show message immediately
+      const optimisticMessage: Message = {
+        id: `temp-${Date.now()}`,
+        body: messageBody,
+        createdAt: new Date().toISOString(),
+        flagged: false,
+        flags: [],
+        author: {
+          id: user.id,
+          displayName: user.displayName || user.name || 'You',
+        },
+      };
+      
+      console.log('Adding optimistic message:', optimisticMessage);
+      setMessages((prev) => [...prev, optimisticMessage]);
+
       // Emit message via Socket.IO
       socket.emit('sendMessage', {
         slug: room.slug,
-        body: newMessage.trim(),
+        body: messageBody,
         authorId: user.id,
       });
+
+      console.log('✅ Message emitted to server');
 
       // Clear the input
       setNewMessage('');
@@ -155,7 +238,7 @@ export default function RoomPage() {
         textareaRef.current.style.height = 'auto';
       }
     } catch (err) {
-      console.error('Error sending message:', err);
+      console.error('❌ Error sending message:', err);
       setError('Failed to send message');
     } finally {
       setSending(false);

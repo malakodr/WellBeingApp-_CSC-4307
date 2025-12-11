@@ -3,6 +3,14 @@ import { z } from 'zod';
 import prisma from '../lib/prisma';
 import { AuthRequest } from '../middleware/auth';
 
+// Booking status enum
+export const BookingStatus = {
+  PENDING: 'PENDING',
+  CONFIRMED: 'CONFIRMED',
+  CANCELLED: 'CANCELLED',
+  COMPLETED: 'COMPLETED',
+} as const;
+
 const bookingSchema = z.object({
   counselorId: z.string(),
   startAt: z.string().datetime(),
@@ -17,9 +25,23 @@ const updateBookingSchema = z.object({
 
 export const createBooking = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
+    const studentId = req.user?.sub;
+    
+    if (!studentId) {
+      res.status(401).json({ error: 'User not authenticated' });
+      return;
+    }
+
     const validatedData = bookingSchema.parse(req.body);
     const startAt = new Date(validatedData.startAt);
     const endAt = new Date(validatedData.endAt);
+
+    // Validate minimum 30-minute duration
+    const durationMinutes = (endAt.getTime() - startAt.getTime()) / (1000 * 60);
+    if (durationMinutes < 30) {
+      res.status(400).json({ error: 'Booking must be at least 30 minutes long' });
+      return;
+    }
 
     // Validate counselor exists and has counselor role
     const counselor = await prisma.user.findUnique({
@@ -67,20 +89,27 @@ export const createBooking = async (req: AuthRequest, res: Response): Promise<vo
     // Create booking
     const booking = await prisma.booking.create({
       data: {
-        studentId: req.user!.id,
+        studentId,
         counselorId: validatedData.counselorId,
         startAt,
         endAt,
         notes: validatedData.notes,
+        status: BookingStatus.PENDING,
       },
       include: {
+        student: {
+          select: { id: true, name: true, displayName: true, email: true },
+        },
         counselor: {
-          select: { id: true, name: true, email: true },
+          select: { id: true, name: true, displayName: true, email: true },
         },
       },
     });
 
-    res.status(201).json({ booking });
+    res.status(201).json({ 
+      booking,
+      message: 'Booking created successfully. Waiting for counselor confirmation.'
+    });
   } catch (error) {
     if (error instanceof z.ZodError) {
       res.status(400).json({ error: 'Validation error', details: error.errors });
@@ -97,19 +126,19 @@ export const getMyBookings = async (req: AuthRequest, res: Response): Promise<vo
     const isCounselor = req.user!.role === 'counselor';
 
     const where = isStudent
-      ? { studentId: req.user!.id }
+      ? { studentId: req.user!.sub }
       : isCounselor
-      ? { counselorId: req.user!.id }
-      : { OR: [{ studentId: req.user!.id }, { counselorId: req.user!.id }] };
+      ? { counselorId: req.user!.sub }
+      : { OR: [{ studentId: req.user!.sub }, { counselorId: req.user!.sub }] };
 
     const bookings = await prisma.booking.findMany({
       where,
       include: {
         student: {
-          select: { id: true, name: true, email: true },
+          select: { id: true, name: true, displayName: true, email: true },
         },
         counselor: {
-          select: { id: true, name: true, email: true },
+          select: { id: true, name: true, displayName: true, email: true },
         },
       },
       orderBy: { startAt: 'desc' },
@@ -137,8 +166,8 @@ export const updateBooking = async (req: AuthRequest, res: Response): Promise<vo
       return;
     }
 
-    const isStudent = req.user!.id === booking.studentId;
-    const isCounselor = req.user!.id === booking.counselorId;
+    const isStudent = req.user!.sub === booking.studentId;
+    const isCounselor = req.user!.sub === booking.counselorId;
     const isAdmin = req.user!.role === 'admin';
 
     if (!isStudent && !isCounselor && !isAdmin) {
@@ -152,10 +181,10 @@ export const updateBooking = async (req: AuthRequest, res: Response): Promise<vo
       data: validatedData,
       include: {
         student: {
-          select: { id: true, name: true, email: true },
+          select: { id: true, name: true, displayName: true, email: true },
         },
         counselor: {
-          select: { id: true, name: true, email: true },
+          select: { id: true, name: true, displayName: true, email: true },
         },
       },
     });
@@ -171,13 +200,14 @@ export const updateBooking = async (req: AuthRequest, res: Response): Promise<vo
   }
 };
 
-export const getCounselors = async (req: AuthRequest, res: Response): Promise<void> => {
+export const getCounselors = async (_req: AuthRequest, res: Response): Promise<void> => {
   try {
     const counselors = await prisma.user.findMany({
       where: { role: 'counselor' },
       select: {
         id: true,
         name: true,
+        displayName: true,
         email: true,
       },
     });
@@ -185,6 +215,91 @@ export const getCounselors = async (req: AuthRequest, res: Response): Promise<vo
     res.json({ counselors });
   } catch (error) {
     console.error('Get counselors error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+};
+
+// Get bookings with query filters (counselorId, status, userId)
+export const getBookings = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const { counselorId, status, userId } = req.query;
+    
+    // Build where clause
+    const where: any = {};
+    
+    if (counselorId) {
+      where.counselorId = counselorId as string;
+    }
+    
+    if (userId) {
+      where.studentId = userId as string;
+    }
+    
+    if (status) {
+      where.status = status as string;
+    }
+    
+    // Only allow counselors/admins to query others' bookings
+    if ((counselorId || userId) && req.user!.role !== 'counselor' && req.user!.role !== 'admin') {
+      res.status(403).json({ error: 'Forbidden' });
+      return;
+    }
+    
+    const bookings = await prisma.booking.findMany({
+      where,
+      include: {
+        student: {
+          select: { id: true, name: true, displayName: true, email: true },
+        },
+        counselor: {
+          select: { id: true, name: true, displayName: true, email: true },
+        },
+      },
+      orderBy: { startAt: 'desc' },
+    });
+
+    res.json({ bookings, count: bookings.length });
+  } catch (error) {
+    console.error('Get bookings with filters error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+};
+
+// Get booking by ID
+export const getBookingById = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const { id } = req.params;
+    
+    const booking = await prisma.booking.findUnique({
+      where: { id },
+      include: {
+        student: {
+          select: { id: true, name: true, displayName: true, email: true },
+        },
+        counselor: {
+          select: { id: true, name: true, displayName: true, email: true },
+        },
+      },
+    });
+    
+    if (!booking) {
+      res.status(404).json({ error: 'Booking not found' });
+      return;
+    }
+    
+    // Check permissions
+    const isStudent = req.user!.sub === booking.studentId;
+    const isCounselor = req.user!.sub === booking.counselorId;
+    const isAdmin = req.user!.role === 'admin';
+    
+    if (!isStudent && !isCounselor && !isAdmin) {
+      res.status(403).json({ error: 'Forbidden' });
+      return;
+    }
+    
+    res.json({ booking });
+  } catch (error) {
+    console.error('Get booking by ID error:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 };

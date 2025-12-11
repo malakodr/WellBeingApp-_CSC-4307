@@ -1,0 +1,268 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+  pull_request:
+    branches:
+      - main
+      - develop
+
+env:
+  NODE_VERSION: '20.x'
+
+jobs:
+  # Backend Build and Test Job
+  backend:
+    name: Backend Build & Test
+    runs-on: ubuntu-latest
+    
+    defaults:
+      run:
+        working-directory: ./backend
+    
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: test_user
+          POSTGRES_PASSWORD: test_password
+          POSTGRES_DB: wellbeing_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: backend/package-lock.json
+      
+      - name: Cache node modules
+        uses: actions/cache@v4
+        with:
+          path: backend/node_modules
+          key: ${{ runner.os }}-backend-node-${{ hashFiles('backend/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-backend-node-
+      
+      - name: Install dependencies
+        run: npm ci
+      
+      - name: Generate Prisma Client
+        run: npm run prisma:generate
+        env:
+          DATABASE_URL: postgresql://test_user:test_password@localhost:5432/wellbeing_test
+      
+      - name: Run Prisma Migrations
+        run: npx prisma migrate deploy
+        env:
+          DATABASE_URL: postgresql://test_user:test_password@localhost:5432/wellbeing_test
+      
+      - name: Type check
+        run: npx tsc --noEmit
+      
+      - name: Build backend
+        run: npm run build
+      
+      - name: Run tests (if configured)
+        run: npm test --if-present
+        env:
+          DATABASE_URL: postgresql://test_user:test_password@localhost:5432/wellbeing_test
+          REDIS_URL: redis://localhost:6379
+          JWT_SECRET: test-secret-key
+          NODE_ENV: test
+      
+      - name: Upload backend build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-build
+          path: backend/dist
+          retention-days: 7
+
+  # Frontend Build and Test Job
+  frontend:
+    name: Frontend Build & Test
+    runs-on: ubuntu-latest
+    
+    defaults:
+      run:
+        working-directory: ./frontend
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+      
+      - name: Cache node modules
+        uses: actions/cache@v4
+        with:
+          path: frontend/node_modules
+          key: ${{ runner.os }}-frontend-node-${{ hashFiles('frontend/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-frontend-node-
+      
+      - name: Install dependencies
+        run: npm ci
+      
+      - name: Lint code
+        run: npm run lint
+      
+      - name: Type check
+        run: npx tsc --noEmit
+      
+      - name: Build frontend
+        run: npm run build
+        env:
+          NODE_ENV: production
+      
+      - name: Run tests (if configured)
+        run: npm test --if-present
+      
+      - name: Upload frontend build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-build
+          path: frontend/dist
+          retention-days: 7
+      
+      - name: Upload build size report
+        if: github.event_name == 'pull_request'
+        run: |
+          echo "## Build Size Report" >> $GITHUB_STEP_SUMMARY
+          echo "Frontend build completed successfully" >> $GITHUB_STEP_SUMMARY
+          du -sh dist >> $GITHUB_STEP_SUMMARY || echo "Build size: Available after build" >> $GITHUB_STEP_SUMMARY
+
+  # Code Quality Job
+  code-quality:
+    name: Code Quality Checks
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      
+      - name: Check for security vulnerabilities (Backend)
+        working-directory: ./backend
+        run: |
+          npm audit --audit-level=moderate || true
+      
+      - name: Check for security vulnerabilities (Frontend)
+        working-directory: ./frontend
+        run: |
+          npm audit --audit-level=moderate || true
+      
+      - name: Check code formatting (Backend)
+        working-directory: ./backend
+        run: |
+          echo "Checking TypeScript formatting..."
+          npx prettier --check "src/**/*.ts" || echo "Consider adding Prettier for code formatting"
+        continue-on-error: true
+      
+      - name: Check code formatting (Frontend)
+        working-directory: ./frontend
+        run: |
+          echo "Checking TypeScript/React formatting..."
+          npx prettier --check "src/**/*.{ts,tsx}" || echo "Consider adding Prettier for code formatting"
+        continue-on-error: true
+
+  # Deploy Job (runs only on main branch after successful builds)
+  deploy:
+    name: Deploy Application
+    needs: [backend, frontend]
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Download backend artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: backend-build
+          path: backend/dist
+      
+      - name: Download frontend artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: frontend-build
+          path: frontend/dist
+      
+      - name: Display deployment message
+        run: |
+          echo "## Deployment Summary" >> $GITHUB_STEP_SUMMARY
+          echo "✅ Backend built successfully" >> $GITHUB_STEP_SUMMARY
+          echo "✅ Frontend built successfully" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Next Steps:" >> $GITHUB_STEP_SUMMARY
+          echo "- Configure deployment secrets (if using cloud providers)" >> $GITHUB_STEP_SUMMARY
+          echo "- Add deployment scripts for your hosting platform" >> $GITHUB_STEP_SUMMARY
+          echo "- Update this workflow with actual deployment commands" >> $GITHUB_STEP_SUMMARY
+      
+      # Uncomment and configure based on your deployment platform
+      # 
+      # - name: Deploy to Production
+      #   run: |
+      #     # Add your deployment commands here
+      #     # Examples:
+      #     # - Deploy to Heroku: git push heroku main
+      #     # - Deploy to AWS: aws s3 sync frontend/dist s3://your-bucket
+      #     # - Deploy to Vercel: vercel --prod
+      #     # - Deploy to Railway: railway up
+      #   env:
+      #     # Add your deployment secrets here
+      #     # DEPLOY_KEY: ${{ secrets.DEPLOY_KEY }}
+      #     # API_TOKEN: ${{ secrets.API_TOKEN }}
+
+  # Notification Job
+  notify:
+    name: Notify Build Status
+    needs: [backend, frontend, code-quality]
+    runs-on: ubuntu-latest
+    if: always()
+    
+    steps:
+      - name: Build Status Summary
+        run: |
+          echo "## CI/CD Pipeline Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Backend Status:** ${{ needs.backend.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Frontend Status:** ${{ needs.frontend.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Code Quality Status:** ${{ needs.code-quality.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Commit:** ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Branch:** ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Triggered by:** ${{ github.actor }}" >> $GITHUB_STEP_SUMMARY
