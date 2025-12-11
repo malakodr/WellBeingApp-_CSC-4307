@@ -134,7 +134,7 @@ export function AdminLayout({ children }: AdminLayoutProps) {
                 </div>
                 <div className="flex-1 text-left min-w-0">
                   <p style={{ color: '#ffffff' }} className="text-sm font-medium truncate">
-                    {user?.displayName}
+                    {user?.displayName || user?.name || 'Admin'}
                   </p>
                   <p style={{ color: 'rgba(255, 255, 255, 0.7)' }} className="text-xs">Administrator</p>
                 </div>
@@ -148,7 +148,7 @@ export function AdminLayout({ children }: AdminLayoutProps) {
                   />
                   <div className="absolute bottom-full left-0 right-0 mb-2 bg-white rounded-lg shadow-xl border border-gray-200 py-2 z-50">
                     <div className="px-4 py-2 border-b border-gray-100">
-                      <p className="text-sm font-medium text-gray-900">{user?.displayName}</p>
+                      <p className="text-sm font-medium text-gray-900">{user?.displayName || user?.name || 'Admin'}</p>
                       <p className="text-xs text-gray-500">{user?.email}</p>
                     </div>
                     <button
@@ -179,7 +179,7 @@ export function AdminLayout({ children }: AdminLayoutProps) {
             </button>
             <div>
               <h2 className="text-lg font-semibold text-gray-900">
-                Welcome back, {user?.displayName?.split(' ')[0]}
+                Welcome back, {(user?.displayName || user?.name || 'Admin').split(' ')[0]}
               </h2>
               <p className="text-xs text-gray-500">
                 {new Date().toLocaleDateString('en-US', { 

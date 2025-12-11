@@ -132,10 +132,10 @@ export const initializeSocket = (httpServer: HTTPServer): SocketIOServer => {
       }
     });
 
-    // Send message in private support room
-    socket.on('message:send', async (data: { roomId: string; content: string }) => {
+    // Send message in private support room (broadcast only - message already saved via API)
+    socket.on('message:send', async (data: { roomId: string; content: string; messageId?: string }) => {
       try {
-        const { roomId, content } = data;
+        const { roomId, content, messageId } = data;
         const userId = socket.user!.sub;
 
         if (!content || content.trim().length === 0) {
@@ -169,38 +169,31 @@ export const initializeSocket = (httpServer: HTTPServer): SocketIOServer => {
           return;
         }
 
-        // Create message in database
-        const message = await prisma.supportMessage.create({
-          data: {
-            roomId,
-            senderId: userId,
-            content: content.trim(),
-          },
-          include: {
-            sender: {
-              select: {
-                id: true,
-                displayName: true,
-                role: true,
-              },
-            },
+        // Get sender info for broadcast
+        const sender = await prisma.user.findUnique({
+          where: { id: userId },
+          select: {
+            id: true,
+            displayName: true,
+            role: true,
           },
         });
 
-        // Broadcast to both participants with complete message data
+        // Broadcast to OTHER participants only (exclude sender to prevent duplicate)
         const messagePayload = {
-          id: message.id,
-          content: message.content,
-          senderId: message.sender.id,
-          senderName: message.sender.displayName || 'Anonymous',
-          senderRole: message.sender.role,
-          timestamp: message.createdAt.toISOString(),
-          isRead: message.isRead,
+          id: messageId || `socket-${Date.now()}`,
+          content: content.trim(),
+          senderId: sender?.id || userId,
+          senderName: sender?.displayName || 'Anonymous',
+          senderRole: sender?.role || 'student',
+          timestamp: new Date().toISOString(),
+          isRead: false,
         };
 
-        io.to(`support:${roomId}`).emit('message:received', messagePayload);
+        // Broadcast to room but exclude the sender
+        socket.to(`support:${roomId}`).emit('message:received', messagePayload);
 
-        console.log(`✅ Message saved to DB and sent in support room ${roomId}`);
+        console.log(`✅ Message broadcasted to support room ${roomId} (saved via API)`);
       } catch (error) {
         console.error('❌ Send support message error:', error);
         socket.emit('error', { message: 'Failed to send message' });

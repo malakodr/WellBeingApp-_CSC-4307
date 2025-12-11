@@ -127,8 +127,8 @@ export const setupWebSocket = (httpServer: HTTPServer) => {
       });
     });
 
-    // Chat message events
-    socket.on('message:send', async ({ roomId, content }: { roomId: string; content: string }) => {
+    // Chat message events (broadcast only - message already saved via API)
+    socket.on('message:send', async ({ roomId, content, messageId }: { roomId: string; content: string; messageId?: string }) => {
       try {
         // Verify user is in the room
         const room = await prisma.supportRoom.findUnique({
@@ -149,47 +149,29 @@ export const setupWebSocket = (httpServer: HTTPServer) => {
           return;
         }
 
-        // Save message to database
-        const message = await prisma.supportMessage.create({
-          data: {
-            roomId: roomId,
-            senderId: socket.userId!,
-            content,
-            status: 'sent',
-          },
-          include: {
-            sender: {
-              select: {
-                id: true,
-                displayName: true,
-                role: true,
-              },
-            },
-          },
-        });
-        
-        // Update room's last message
-        await prisma.supportRoom.update({
-          where: { id: roomId },
-          data: {
-            lastMessageAt: message.createdAt,
-            lastMessagePreview: content.slice(0, 100),
+        // Get sender info for broadcast
+        const sender = await prisma.user.findUnique({
+          where: { id: socket.userId! },
+          select: {
+            id: true,
+            displayName: true,
+            role: true,
           },
         });
 
-        // Emit to all room participants
-        io.to(`support-room:${roomId}`).emit('message:received', {
-          id: message.id,
-          content: message.content,
-          type: message.type,
-          senderId: message.senderId,
-          senderName: message.sender.displayName,
-          senderRole: message.sender.role,
-          timestamp: message.createdAt,
-          status: message.status,
+        // Broadcast to OTHER room participants only (exclude sender to prevent duplicate)
+        socket.to(`support-room:${roomId}`).emit('message:received', {
+          id: messageId || `socket-${Date.now()}`,
+          content: content,
+          type: 'text',
+          senderId: socket.userId,
+          senderName: sender?.displayName || 'Anonymous',
+          senderRole: sender?.role || 'student',
+          timestamp: new Date(),
+          status: 'sent',
         });
 
-        console.log(`💬 Message sent in room ${roomId} by ${socket.userId}`);
+        console.log(`💬 Message broadcasted in room ${roomId} by ${socket.userId} (saved via API)`);
       } catch (error) {
         console.error('Error sending message:', error);
         socket.emit('error', { message: 'Failed to send message' });

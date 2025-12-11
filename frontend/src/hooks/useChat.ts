@@ -256,9 +256,9 @@ export function useChat({
       messageIdsRef.current.delete(optimisticMessage.id);
       messageIdsRef.current.add(response.message.id);
       
-      // Emit via socket for real-time to other user (optional, backend already does this)
+      // Emit via socket for real-time to other user (pass messageId to avoid duplicate save in DB)
       if (socket && isConnected) {
-        socket.emit('message:send', { roomId: conversationId, content: trimmedContent });
+        socket.emit('message:send', { roomId: conversationId, content: trimmedContent, messageId: response.message.id });
       }
     } catch (err: any) {
       console.error('❌ Failed to send message:', err);

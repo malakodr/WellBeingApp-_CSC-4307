@@ -17,15 +17,13 @@ import { api } from '../../lib/api';
 
 interface PeerApplication {
   id: string;
+  fullName: string;
+  auiEmail: string;
   motivation: string;
   experience: string;
   availability: string;
-  status: 'pending' | 'approved' | 'rejected';
+  status: 'pending' | 'approved' | 'rejected' | 'PENDING' | 'APPROVED' | 'REJECTED';
   createdAt: string;
-  user: {
-    displayName: string;
-    email: string;
-  };
 }
 
 interface Metrics {
@@ -211,8 +209,8 @@ export function AdminDashboard() {
                           <User className="w-5 h-5 text-[#006341]" />
                         </div>
                         <div>
-                          <p className="font-medium text-gray-900">{app.user.displayName}</p>
-                          <p className="text-sm text-gray-600">{app.user.email}</p>
+                          <p className="font-medium text-gray-900">{app.fullName}</p>
+                          <p className="text-sm text-gray-600">{app.auiEmail}</p>
                           <p className="text-xs text-gray-500 mt-1">Applied {appliedDate}</p>
                         </div>
                       </div>

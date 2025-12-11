@@ -130,6 +130,7 @@ function AppRoutes() {
       {/* Redirect old triage to new chat flow */}
       <Route path="/triage" element={<Navigate to="/student/chat/start" replace />} />
       <Route path="/mybookings" element={<MyBookingsNew />} />
+      <Route path="/become-peer" element={<BecomePeer />} />
       <Route path="/support/start" element={<ChatStart />} />
       <Route path="/support/my-rooms" element={<MySupportRooms />} />
       <Route path="/support/queue" element={<Navigate to="/supporter/queue" replace />} />
