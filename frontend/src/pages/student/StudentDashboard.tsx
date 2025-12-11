@@ -18,7 +18,8 @@ import {
   CheckCircle2,
   ArrowRight,
   Loader2,
-  Sparkles
+  Sparkles,
+  UsersRound
 } from 'lucide-react';
 import { api } from '../../lib/api';
 import { useAuth } from '../../hooks/useAuth';
@@ -271,7 +272,7 @@ export function StudentDashboard() {
         {/* Quick Actions Grid - Modern Health style */}
         <div>
           <h2 className="text-lg font-semibold text-gray-900 mb-4">Quick Actions</h2>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             <Link
               to="/student/chat"
               className="group bg-white rounded-3xl p-6 shadow-sm border border-gray-100 hover:shadow-xl hover:border-blue-200 transition-all"
@@ -312,6 +313,20 @@ export function StudentDashboard() {
               </div>
               <h3 className="text-lg font-semibold text-gray-900 mb-2">View Progress</h3>
               <p className="text-sm text-gray-600 leading-relaxed">Track your mood patterns and wellbeing journey</p>
+            </Link>
+
+            <Link
+              to="/become-peer"
+              className="group bg-white rounded-3xl p-6 shadow-sm border border-gray-100 hover:shadow-xl hover:border-orange-200 transition-all"
+            >
+              <div className="flex items-start justify-between mb-4">
+                <div className="w-14 h-14 bg-linear-to-br from-orange-50 to-orange-100 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform">
+                  <UsersRound className="w-7 h-7 text-orange-600" />
+                </div>
+                <ArrowRight className="w-5 h-5 text-gray-400 group-hover:text-orange-600 group-hover:translate-x-1 transition-all" />
+              </div>
+              <h3 className="text-lg font-semibold text-gray-900 mb-2">Become a Peer Tutor</h3>
+              <p className="text-sm text-gray-600 leading-relaxed">Help fellow students by becoming a peer support mentor</p>
             </Link>
           </div>
         </div>

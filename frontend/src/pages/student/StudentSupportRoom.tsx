@@ -309,9 +309,9 @@ export function StudentSupportRoom() {
         } : msg
       ));
       
-      // Emit via socket for real-time
+      // Emit via socket for real-time (pass messageId to avoid duplicate save)
       if (socket && isConnected) {
-        socket.emit('message:send', { roomId, content: content.trim() });
+        socket.emit('message:send', { roomId, content: content.trim(), messageId: response.message.id });
       }
     } catch (error) {
       console.error('❌ Failed to send message:', error);
