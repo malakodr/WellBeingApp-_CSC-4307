@@ -24,6 +24,9 @@ export const createApp = (): Application => {
     origin: [
       process.env.FRONTEND_URL || 'http://localhost:5173',
       'http://localhost:5174',
+      'https://wellbeingapp-ten.vercel.app',
+      'https://wellbeingapp-q4ygnc12n-travels-projects-3dff7109.vercel.app',
+      /\.vercel\.app$/,  // Allow all vercel.app subdomains
     ],
     credentials: true,
   }));
